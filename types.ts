@@ -62,3 +62,10 @@ export interface ItineraryResultData {
   accommodations: Accommodation[];
   itinerary: ItineraryData;
 }
+
+export interface SavedItinerary {
+    id: string;
+    timestamp: number;
+    formValues: ItineraryFormValues;
+    resultData: ItineraryResultData;
+}

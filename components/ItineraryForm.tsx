@@ -1,7 +1,8 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { INTEREST_OPTIONS, TRIP_TYPE_OPTIONS, PACE_OPTIONS, DIETARY_PREFERENCE_OPTIONS, ACCOMMODATION_OPTIONS, ACCESSIBILITY_OPTIONS } from '../constants';
 import type { ItineraryFormValues, TripType, BudgetLevel, Pace, DietaryPreference, AccommodationType, AccessibilityNeeds } from '../types';
+import { getDestinationSuggestions } from '../services/geminiService';
 
 interface ItineraryFormProps {
   onGenerate: (values: ItineraryFormValues) => void;
@@ -24,6 +25,8 @@ const FormField = ({ id, label, children }: FormFieldProps) => (
 
 export default function ItineraryForm({ onGenerate, loading, hasResult }: ItineraryFormProps) {
   const [destination, setDestination] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [tripType, setTripType] = useState<TripType>("romantic");
@@ -36,6 +39,34 @@ export default function ItineraryForm({ onGenerate, loading, hasResult }: Itiner
   const [allInterests, setAllInterests] = useState<string[]>(INTEREST_OPTIONS);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [customInterest, setCustomInterest] = useState<string>("");
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+        if (destination.length > 2) {
+            const results = await getDestinationSuggestions(destination);
+            setSuggestions(results);
+            setShowSuggestions(true);
+        } else {
+            setSuggestions([]);
+            setShowSuggestions(false);
+        }
+    };
+    
+    const timeoutId = setTimeout(fetchSuggestions, 500);
+    return () => clearTimeout(timeoutId);
+  }, [destination]);
 
   function toggleInterest(interest: string) {
     setSelectedInterests((prev) =>
@@ -53,7 +84,6 @@ export default function ItineraryForm({ onGenerate, loading, hasResult }: Itiner
     }
     setCustomInterest("");
   }
-
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -81,16 +111,40 @@ export default function ItineraryForm({ onGenerate, loading, hasResult }: Itiner
       className="bg-slate-900/70 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-6 space-y-6 shadow-2xl shadow-slate-950/50"
     >
         <div className="space-y-4">
-            {/* FIX: Wrapped input element within FormField to provide required 'children' prop. */}
              <FormField id="destination" label="Where are you headed?">
-                 <input id="destination" className={inputStyles} placeholder="e.g., Kyoto, Japan" value={destination} onChange={(e) => setDestination(e.target.value)} required />
+                 <div className="relative" ref={wrapperRef}>
+                    <input 
+                        id="destination" 
+                        className={inputStyles} 
+                        placeholder="e.g., Kyoto, Japan" 
+                        value={destination} 
+                        onChange={(e) => setDestination(e.target.value)} 
+                        onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                        autoComplete="off"
+                        required 
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                        <ul className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
+                            {suggestions.map((s, idx) => (
+                                <li 
+                                    key={idx}
+                                    onClick={() => {
+                                        setDestination(s);
+                                        setShowSuggestions(false);
+                                    }}
+                                    className="px-4 py-2 hover:bg-slate-700 cursor-pointer text-sm text-slate-200"
+                                >
+                                    {s}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                 </div>
              </FormField>
             <div className="grid sm:grid-cols-2 gap-4">
-                {/* FIX: Wrapped input element within FormField to provide required 'children' prop. */}
                 <FormField id="startDate" label="Start Date">
                     <input id="startDate" type="date" className={inputStyles} value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
                 </FormField>
-                {/* FIX: Wrapped input element within FormField to provide required 'children' prop. */}
                 <FormField id="endDate" label="End Date">
                     <input id="endDate" type="date" className={inputStyles} value={endDate} onChange={(e) => setEndDate(e.target.value)} min={startDate} required />
                 </FormField>
@@ -100,7 +154,6 @@ export default function ItineraryForm({ onGenerate, loading, hasResult }: Itiner
         <fieldset className="border-t border-slate-700 pt-6">
             <legend className="text-base font-semibold text-slate-200 mb-4">Tell us about your trip</legend>
             <div className="grid sm:grid-cols-2 gap-4">
-                {/* FIX: Wrapped select element within FormField to provide required 'children' prop. */}
                  <FormField id="tripType" label="Trip Type">
                     <select id="tripType" className={inputStyles} value={tripType} onChange={(e) => setTripType(e.target.value as TripType)}>
                         {TRIP_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -109,25 +162,21 @@ export default function ItineraryForm({ onGenerate, loading, hasResult }: Itiner
                         <p className="mt-2 text-xs text-slate-400">{selectedTripTypeDescription}</p>
                     )}
                  </FormField>
-                {/* FIX: Wrapped select element within FormField to provide required 'children' prop. */}
                  <FormField id="pace" label="Pace">
                     <select id="pace" className={inputStyles} value={pace} onChange={(e) => setPace(e.target.value as Pace)}>
                         {PACE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                 </FormField>
-                {/* FIX: Wrapped select element within FormField to provide required 'children' prop. */}
                  <FormField id="accommodationType" label="Accommodation">
                     <select id="accommodationType" className={inputStyles} value={accommodationType} onChange={(e) => setAccommodationType(e.target.value as AccommodationType)}>
                         {ACCOMMODATION_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                 </FormField>
-                {/* FIX: Wrapped select element within FormField to provide required 'children' prop. */}
                 <FormField id="dietaryPreference" label="Dietary Needs">
                     <select id="dietaryPreference" className={inputStyles} value={dietaryPreference} onChange={(e) => setDietaryPreference(e.target.value as DietaryPreference)}>
                         {DIETARY_PREFERENCE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                 </FormField>
-                {/* FIX: Wrapped select element within FormField to provide required 'children' prop. */}
                  <FormField id="accessibilityNeeds" label="Accessibility">
                     <select id="accessibilityNeeds" className={inputStyles} value={accessibilityNeeds} onChange={(e) => setAccessibilityNeeds(e.target.value as AccessibilityNeeds)}>
                         {ACCESSIBILITY_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}

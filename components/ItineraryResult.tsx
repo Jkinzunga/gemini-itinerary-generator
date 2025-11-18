@@ -6,9 +6,8 @@ interface ActivityItemProps {
   activity: Activity;
 }
 
-// FIX: Explicitly typed the component as React.FC to correctly handle the 'key' prop provided during mapping.
 const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => (
-    <div className="flex items-start gap-4 group">
+    <div className="flex items-start gap-4 group animate-fade-in">
       <div className="flex flex-col items-center">
         <div className="w-24 text-right text-sm font-medium text-slate-400">{activity.time}</div>
         <div className="w-px h-full bg-slate-700 group-last:bg-transparent mt-1"></div>
@@ -35,7 +34,11 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => (
     </div>
 );
 
-const DayCard: React.FC<{ dayData: ItineraryDay }> = ({ dayData }) => {
+const DayCard: React.FC<{ 
+    dayData: ItineraryDay, 
+    onAddMore: (day: number) => Promise<void>,
+    isAdding: boolean
+}> = ({ dayData, onAddMore, isAdding }) => {
   const [isOpen, setIsOpen] = useState(true);
 
   const renderTimeline = (title: string, activities: Activity[]) => {
@@ -69,7 +72,7 @@ const DayCard: React.FC<{ dayData: ItineraryDay }> = ({ dayData }) => {
               <img src={dayData.imageUrl} alt={dayData.image_prompt} className="w-full h-full object-cover transition-transform duration-300 ease-in-out group-hover:scale-105" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-            <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+            <div className="absolute bottom-0 left-0 right-0 p-4 text-white text-left">
                 <h3 className="text-2xl font-bold text-white text-shadow-lg">Day {dayData.day}: {dayData.title}</h3>
                 <div className="flex justify-between items-center text-sm mt-1">
                     <div className="font-semibold">{dayData.weather.summary}</div>
@@ -79,12 +82,26 @@ const DayCard: React.FC<{ dayData: ItineraryDay }> = ({ dayData }) => {
         </div>
       </button>
       
-      <div id={`day-${dayData.day}-content`} className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[2000px]' : 'max-h-0'} overflow-hidden`}>
+      <div id={`day-${dayData.day}-content`} className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[3000px]' : 'max-h-0'} overflow-hidden`}>
         <div className="p-6 space-y-6">
             <div className="space-y-6">
                 {renderTimeline('🌅 Morning', dayData.morning)}
                 {renderTimeline('☀️ Afternoon', dayData.afternoon)}
                 {renderTimeline('🌙 Evening', dayData.evening)}
+            </div>
+
+            <div className="flex justify-center pt-4">
+                 <button 
+                    onClick={() => onAddMore(dayData.day)}
+                    disabled={isAdding}
+                    className="flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-900 hover:bg-cyan-900/30 px-4 py-2 rounded-full transition-all disabled:opacity-50"
+                 >
+                    {isAdding ? (
+                         <span className="animate-spin h-4 w-4 border-2 border-cyan-500 border-t-transparent rounded-full"></span>
+                    ) : (
+                        <span>➕ Add more to this day</span>
+                    )}
+                 </button>
             </div>
 
             <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-700">
@@ -98,11 +115,19 @@ const DayCard: React.FC<{ dayData: ItineraryDay }> = ({ dayData }) => {
   );
 }
 
-export default function ItineraryResult({ data }: { data: ItineraryResultData }) {
+export default function ItineraryResult({ 
+    data, 
+    onSave,
+    onAddMore
+}: { 
+    data: ItineraryResultData,
+    onSave: () => void,
+    onAddMore: (day: number) => Promise<void>
+}) {
   const [showJson, setShowJson] = useState(false);
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [summaryText, setSummaryText] = useState(data.summary);
-
+  const [addingToDay, setAddingToDay] = useState<number | null>(null);
 
   const formatTextExport = (): string => {
     let text = "Your AI-Generated Travel Itinerary\n===================================\n\n";
@@ -153,15 +178,24 @@ export default function ItineraryResult({ data }: { data: ItineraryResultData })
     URL.revokeObjectURL(url);
   };
 
+  const handleAddMoreWrapper = async (day: number) => {
+      setAddingToDay(day);
+      await onAddMore(day);
+      setAddingToDay(null);
+  }
+
   return (
-    <section className="mt-8 animate-fade-in space-y-6">
-        <div className="flex justify-between items-center">
+    <section className="mt-8 animate-fade-in space-y-6 pb-20">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
              <h2 className="text-3xl font-bold text-slate-100">Your Custom Itinerary</h2>
-             <div className="flex gap-2">
-                 <button onClick={() => setShowJson(!showJson)} className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-md transition-colors">
+             <div className="flex flex-wrap gap-2">
+                 <button onClick={onSave} className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-1">
+                    💾 Save Itinerary
+                 </button>
+                 <button onClick={() => setShowJson(!showJson)} className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-2 rounded-md transition-colors">
                     {showJson ? 'Hide JSON' : 'View JSON'}
                 </button>
-                <button onClick={handleDownload} className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-md transition-colors">
+                <button onClick={handleDownload} className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 rounded-md transition-colors">
                     Export Text
                 </button>
              </div>
@@ -225,7 +259,14 @@ export default function ItineraryResult({ data }: { data: ItineraryResultData })
         )}
       
         <div className="space-y-6">
-            {data.itinerary.map((dayData) => <DayCard key={dayData.day} dayData={dayData} />)}
+            {data.itinerary.map((dayData) => (
+                <DayCard 
+                    key={dayData.day} 
+                    dayData={dayData} 
+                    onAddMore={handleAddMoreWrapper}
+                    isAdding={addingToDay === dayData.day}
+                />
+            ))}
         </div>
         
         {showJson && (

@@ -1,6 +1,6 @@
 
-import { GoogleGenAI } from "@google/genai";
-import type { ItineraryFormValues, ItineraryResultData } from '../types';
+import { GoogleGenAI, Type } from "@google/genai";
+import type { ItineraryFormValues, ItineraryResultData, ItineraryDay, Activity } from '../types';
 
 function buildPrompt(details: ItineraryFormValues): string {
   const {
@@ -94,6 +94,12 @@ export async function generateItinerary(details: ItineraryFormValues): Promise<I
     }
 
     const itineraryData = JSON.parse(jsonText);
+
+    // Validate structure to prevent "Itinerary not showing" bug
+    if (!itineraryData.itinerary || !Array.isArray(itineraryData.itinerary)) {
+        throw new Error("Invalid API response: Missing itinerary array.");
+    }
+
     return itineraryData as ItineraryResultData;
 
   } catch (error) {
@@ -106,6 +112,69 @@ export async function generateItinerary(details: ItineraryFormValues): Promise<I
     }
     throw new Error("An unknown error occurred while generating the itinerary.");
   }
+}
+
+export async function getDestinationSuggestions(input: string): Promise<string[]> {
+    if (!process.env.API_KEY || !input || input.length < 3) return [];
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Provide 5 popular travel destinations (City, Country) that match the input string: "${input}". Return only the JSON object.`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        suggestions: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
+                        }
+                    }
+                }
+            }
+        });
+        const data = JSON.parse(response.text);
+        return data.suggestions || [];
+    } catch (e) {
+        console.warn("Autocomplete failed", e);
+        return [];
+    }
+}
+
+export async function addMoreActivities(dayData: ItineraryDay, interests: string[]): Promise<{period: 'morning'|'afternoon'|'evening', activity: Activity}[]> {
+    if (!process.env.API_KEY) throw new Error("Missing API Key");
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `
+        Here is a travel itinerary for one day:
+        ${JSON.stringify(dayData)}
+        
+        The user is interested in: ${interests.join(', ')}.
+        
+        Suggest 2 NEW and DISTINCT activities that fit well into this day's schedule (filling gaps or adding options).
+        Return a JSON object with a key "new_activities" containing an array of objects.
+        Each object must have:
+        - "period": One of "morning", "afternoon", "evening" (choose the best fit).
+        - "activity": An activity object with "time", "name", "description", "maps_link".
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+                responseMimeType: "application/json",
+            }
+        });
+        const data = JSON.parse(response.text);
+        return data.new_activities || [];
+    } catch (e) {
+        console.error("Failed to add activities", e);
+        return [];
+    }
 }
 
 export async function generateImage(prompt: string): Promise<string> {
@@ -133,9 +202,7 @@ export async function generateImage(prompt: string): Promise<string> {
     }
   } catch (error) {
     console.error("Error generating image with Imagen:", error);
-    if (error instanceof Error) {
-        throw new Error(`Failed to generate image. Error: ${error.message}`);
-    }
-    throw new Error("An unknown error occurred while generating the image.");
+    // Return a fallback image placeholder url or empty string to prevent crash
+    return ""; 
   }
 }
