@@ -154,10 +154,14 @@ export async function addMoreActivities(dayData: ItineraryDay, interests: string
         The user is interested in: ${interests.join(', ')}.
         
         Suggest 2 NEW and DISTINCT activities that fit well into this day's schedule (filling gaps or adding options).
-        Return a JSON object with a key "new_activities" containing an array of objects.
+        Use your search tool to find real, open places.
+
+        Return a SINGLE valid JSON object with a key "new_activities" containing an array of objects.
         Each object must have:
         - "period": One of "morning", "afternoon", "evening" (choose the best fit).
         - "activity": An activity object with "time", "name", "description", "maps_link".
+        
+        The output must be pure JSON. Do not wrap in markdown blocks.
     `;
 
     try {
@@ -166,10 +170,18 @@ export async function addMoreActivities(dayData: ItineraryDay, interests: string
             contents: prompt,
             config: {
                 tools: [{googleSearch: {}}],
-                responseMimeType: "application/json",
             }
         });
-        const data = JSON.parse(response.text);
+        
+        let jsonText = response.text.trim();
+        // Handle cases where the AI wraps the JSON in markdown code blocks
+        if (jsonText.startsWith("```json")) {
+          jsonText = jsonText.slice(7, -3).trim();
+        } else if (jsonText.startsWith("```")) {
+          jsonText = jsonText.slice(3, -3).trim();
+        }
+
+        const data = JSON.parse(jsonText);
         return data.new_activities || [];
     } catch (e) {
         console.error("Failed to add activities", e);
