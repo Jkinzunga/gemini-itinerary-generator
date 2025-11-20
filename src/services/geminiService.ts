@@ -1,6 +1,38 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { ItineraryFormValues, ItineraryResultData, ItineraryDay, Activity } from '../types';
+
+// Gemini responses can vary slightly across versions; pull out the text safely.
+function extractResponseText(result: any): string {
+  if (result?.response?.text) {
+    const textFn = result.response.text;
+    return typeof textFn === 'function' ? textFn() : String(textFn);
+  }
+  if (typeof result?.text === 'function') return result.text();
+  if (typeof result?.text === 'string') return result.text;
+  throw new Error("Gemini response did not include text content.");
+}
+
+// Helper to safely read an API key from the environment in both browser and
+// node contexts.
+function getApiKey(): string | undefined {
+  // Vite exposes client env vars on import.meta.env with the VITE_ prefix
+  // (e.g. VITE_API_KEY). Use that in the browser.
+  try {
+    const viteEnv = (import.meta as any).env;
+    if (viteEnv && viteEnv.VITE_API_KEY) return String(viteEnv.VITE_API_KEY);
+  } catch (_) {
+    // ignore - import.meta may not be available in some runtimes
+  }
+
+  // Fallback to Node-style process.env (when running server-side).
+  if (typeof (globalThis as any).process !== 'undefined') {
+    const p = (globalThis as any).process;
+    if (p && p.env && p.env.API_KEY) return String(p.env.API_KEY);
+  }
+
+  return undefined;
+}
 
 function buildPrompt(details: ItineraryFormValues): string {
   const {
@@ -67,24 +99,23 @@ The JSON object must have three top-level keys:
 }
 
 export async function generateItinerary(details: ItineraryFormValues): Promise<ItineraryResultData> {
-  if (!process.env.API_KEY) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     throw new Error("Missing API_KEY environment variable.");
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenerativeAI(apiKey);
+    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const prompt = buildPrompt(details);
     
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        tools: [{googleSearch: {}}],
-        temperature: 0.7,
-      }
-    });
+    const response = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      tools: [{ googleSearch: {} }] as any,
+      generationConfig: { temperature: 0.7 },
+    } as any);
     
-    let jsonText = response.text.trim();
+    let jsonText = extractResponseText(response).trim();
     
     // Handle cases where the AI wraps the JSON in markdown code blocks
     if (jsonText.startsWith("```json")) {
@@ -115,27 +146,32 @@ export async function generateItinerary(details: ItineraryFormValues): Promise<I
 }
 
 export async function getDestinationSuggestions(input: string): Promise<string[]> {
-    if (!process.env.API_KEY || !input || input.length < 3) return [];
+  const apiKey = getApiKey();
+  if (!apiKey || !input || input.length < 3) return [];
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenerativeAI(apiKey);
+  const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Provide 5 popular travel destinations (City, Country) that match the input string: "${input}". Return only the JSON object.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        suggestions: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING }
-                        }
-                    }
-                }
+    const response = await model.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [{ text: `Provide 5 popular travel destinations (City, Country) that match the input string: "${input}". Return only the JSON object.` }]
+      }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        // Use plain JSON Schema to avoid relying on SDK exported `Type` constants
+        responseSchema: {
+          type: "object",
+          properties: {
+            suggestions: {
+              type: "array",
+              items: { type: "string" }
             }
-        });
-        const data = JSON.parse(response.text);
+          }
+        } as any
+      }
+    } as any);
+        const data = JSON.parse(extractResponseText(response));
         return data.suggestions || [];
     } catch (e) {
         console.warn("Autocomplete failed", e);
@@ -144,9 +180,11 @@ export async function getDestinationSuggestions(input: string): Promise<string[]
 }
 
 export async function addMoreActivities(dayData: ItineraryDay, interests: string[]): Promise<{period: 'morning'|'afternoon'|'evening', activity: Activity}[]> {
-    if (!process.env.API_KEY) throw new Error("Missing API Key");
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("Missing API Key");
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenerativeAI(apiKey);
+    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const prompt = `
         Here is a travel itinerary for one day:
         ${JSON.stringify(dayData)}
@@ -160,20 +198,17 @@ export async function addMoreActivities(dayData: ItineraryDay, interests: string
         Each object must have:
         - "period": One of "morning", "afternoon", "evening" (choose the best fit).
         - "activity": An activity object with "time", "name", "description", "maps_link".
-        
+
         The output must be pure JSON. Do not wrap in markdown blocks.
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                tools: [{googleSearch: {}}],
-            }
-        });
+    const response = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      tools: [{ googleSearch: {} }] as any,
+    } as any);
         
-        let jsonText = response.text.trim();
+        let jsonText = extractResponseText(response).trim();
         // Handle cases where the AI wraps the JSON in markdown code blocks
         if (jsonText.startsWith("```json")) {
           jsonText = jsonText.slice(7, -3).trim();
@@ -190,24 +225,28 @@ export async function addMoreActivities(dayData: ItineraryDay, interests: string
 }
 
 export async function generateImage(prompt: string): Promise<string> {
-  if (!process.env.API_KEY) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     throw new Error("Missing API_KEY environment variable.");
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
+    const ai = new GoogleGenerativeAI(apiKey);
+    const model = ai.getGenerativeModel({ model: 'imagen-3.0-generate-002' });
+    const response = await (model as any).generateImages({
       prompt: `A high-quality, aesthetic travel photograph, capturing the essence of: ${prompt}`,
-      config: {
-        numberOfImages: 1,
-        outputMimeType: 'image/jpeg',
-        aspectRatio: '16:9',
-      },
+      numberOfImages: 1,
+      outputMimeType: 'image/jpeg',
+      aspectRatio: '16:9',
     });
 
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+    const inlineImage = response.response?.candidates?.[0]?.content?.parts?.find(
+      (part: any) => part.inlineData?.data
+    )?.inlineData?.data;
+    const fallbackGenerated = (response as any).generatedImages?.[0]?.image?.imageBytes;
+    const base64ImageBytes = inlineImage || fallbackGenerated;
+
+    if (base64ImageBytes) {
       return `data:image/jpeg;base64,${base64ImageBytes}`;
     } else {
       throw new Error("Image generation failed to produce an image.");

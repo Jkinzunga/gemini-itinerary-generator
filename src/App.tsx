@@ -1,9 +1,8 @@
-
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import ItineraryForm from "./components/ItineraryForm";
 import ItineraryResult from "./components/ItineraryResult";
 import SavedItineraries from "./components/SavedItineraries";
-import type { ItineraryFormValues, ItineraryResultData, SavedItinerary, ItineraryDay } from './types';
+import type { ItineraryFormValues, ItineraryResultData, SavedItinerary } from './types';
 import { generateItinerary, generateImage, addMoreActivities } from './services/geminiService';
 
 type ActiveTab = 'generator' | 'saved';

@@ -1,5 +1,5 @@
 
-import type { TripType, Pace, DietaryPreference, AccommodationType, AccessibilityNeeds } from './types';
+import type { TripType, Pace, DietaryPreference, AccommodationType, AccessibilityNeeds } from '../types';
 
 export const INTEREST_OPTIONS: string[] = [
   "Food",

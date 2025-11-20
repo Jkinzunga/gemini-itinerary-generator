@@ -1,5 +1,4 @@
 
-import React from 'react';
 import type { SavedItinerary } from '../types';
 
 interface SavedItinerariesProps {

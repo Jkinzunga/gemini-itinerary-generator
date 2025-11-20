@@ -1,12 +1,13 @@
 
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { FC } from 'react';
 import type { ItineraryResultData, ItineraryDay, Activity, Accommodation } from '../types';
 
 interface ActivityItemProps {
   activity: Activity;
 }
 
-const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => (
+const ActivityItem: FC<ActivityItemProps> = ({ activity }) => (
     <div className="flex items-start gap-4 group animate-fade-in">
       <div className="flex flex-col items-center">
         <div className="w-24 text-right text-sm font-medium text-slate-400">{activity.time}</div>
@@ -47,7 +48,7 @@ const DayCard: React.FC<{
         <div>
             <h3 className="text-lg font-semibold text-cyan-400 mb-2">{title}</h3>
             <div className="space-y-2">
-                {activities.map((activity, index) => <ActivityItem key={index} activity={activity} />)}
+                {activities.map((activity: Activity, index: number) => <ActivityItem key={index} activity={activity} />)}
             </div>
         </div>
     );
@@ -105,9 +106,9 @@ const DayCard: React.FC<{
             </div>
 
             <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-700">
-                {dayData.vibe_tags.map((tag, index) => (
-                    <span key={index} className="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">{tag}</span>
-                ))}
+                                {dayData.vibe_tags.map((tag: string, index: number) => (
+                                        <span key={index} className="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">{tag}</span>
+                                ))}
             </div>
         </div>
       </div>
@@ -133,22 +134,22 @@ export default function ItineraryResult({
     let text = "Your AI-Generated Travel Itinerary\n===================================\n\n";
     text += `Trip Summary:\n${summaryText}\n\n-----------------------------------\n\n`;
 
-    if (data.accommodations && data.accommodations.length > 0) {
+        if (data.accommodations && data.accommodations.length > 0) {
         text += "Accommodation Options:\n";
-        data.accommodations.forEach(acc => {
+        data.accommodations.forEach((acc: Accommodation) => {
             text += `- ${acc.name} (${acc.type}): ${acc.description}\n`;
         });
         text += "\n-----------------------------------\n\n";
     }
 
-    data.itinerary.forEach(day => {
+    data.itinerary.forEach((day: ItineraryDay) => {
         text += `Day ${day.day}: ${day.title}\n`;
         text += `Weather: ${day.weather.summary} (${day.weather.low_temp}°C / ${day.weather.high_temp}°C)\n\n`;
         
         const formatActivities = (period: string, activities: Activity[]) => {
             if (Array.isArray(activities) && activities.length > 0) {
                 text += `${period}:\n`;
-                activities.forEach(act => {
+                activities.forEach((act: Activity) => {
                     text += `- ${act.time} - ${act.name}: ${act.description}\n`;
                 });
                 text += "\n";
@@ -232,7 +233,7 @@ export default function ItineraryResult({
             <div className="p-5 rounded-lg bg-slate-800/50 border border-slate-700">
                 <h3 className="text-lg font-semibold text-slate-200 mb-4">🏨 Accommodation Options</h3>
                 <div className="space-y-3">
-                    {data.accommodations.map((acc, index) => (
+                    {data.accommodations.map((acc: Accommodation, index: number) => (
                         <div key={index} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors">
                             <div className="flex-1">
                                 <div className="flex items-center gap-3">
@@ -259,7 +260,7 @@ export default function ItineraryResult({
         )}
       
         <div className="space-y-6">
-            {data.itinerary.map((dayData) => (
+            {data.itinerary.map((dayData: ItineraryDay) => (
                 <DayCard 
                     key={dayData.day} 
                     dayData={dayData} 

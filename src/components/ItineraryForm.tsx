@@ -1,8 +1,10 @@
 
-import React, { useState, useEffect, useRef } from "react";
-import { INTEREST_OPTIONS, TRIP_TYPE_OPTIONS, PACE_OPTIONS, DIETARY_PREFERENCE_OPTIONS, ACCOMMODATION_OPTIONS, ACCESSIBILITY_OPTIONS } from '../constants';
+import { useState, useEffect, useRef } from "react";
+import type { ReactNode } from 'react';
+import { INTEREST_OPTIONS, TRIP_TYPE_OPTIONS, PACE_OPTIONS, DIETARY_PREFERENCE_OPTIONS, ACCOMMODATION_OPTIONS, ACCESSIBILITY_OPTIONS } from './constants';
 import type { ItineraryFormValues, TripType, BudgetLevel, Pace, DietaryPreference, AccommodationType, AccessibilityNeeds } from '../types';
 import { getDestinationSuggestions } from '../services/geminiService';
+
 
 interface ItineraryFormProps {
   onGenerate: (values: ItineraryFormValues) => void;
@@ -11,9 +13,9 @@ interface ItineraryFormProps {
 }
 
 interface FormFieldProps {
-    id: string;
-    label: string;
-    children: React.ReactNode;
+  id: string;
+  label: string;
+  children: ReactNode;
 }
 
 const FormField = ({ id, label, children }: FormFieldProps) => (
@@ -30,7 +32,7 @@ export default function ItineraryForm({ onGenerate, loading, hasResult }: Itiner
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [tripType, setTripType] = useState<TripType>("romantic");
-  const [budgetLevel, setBudgetLevel] = useState<BudgetLevel>("medium");
+  const [budgetLevel, _setBudgetLevel] = useState<BudgetLevel>("medium");
   const [pace, setPace] = useState<Pace>("balanced");
   const [dietaryPreference, setDietaryPreference] = useState<DietaryPreference>("none");
   const [accommodationType, setAccommodationType] = useState<AccommodationType>('hotel');
